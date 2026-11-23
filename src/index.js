@@ -108,6 +108,7 @@ async function ensureUser(user) {
 
 // ============================== DROPS ==============================
 const lastDrop = new Map(); // chatId -> last character id (avoid immediate repeats)
+const lastDropError = new Map(); // chatId -> last reason a drop could not be sent
 
 // Rarity is picked by weight first, then a random character of that rarity.
 async function pickCharacter(chatId) {
@@ -154,6 +155,7 @@ async function sweepExpiredDrops() {
 
 // Returns true if a character was dropped. Empty database is silent unless announceEmpty is set.
 async function sendDrop(chatId, { announceEmpty = false } = {}) {
+  lastDropError.delete(String(chatId));
   const character = await pickCharacter(chatId);
   if (!character) {
     if (announceEmpty) await bot.sendMessage(chatId, 'Hozircha personajlar bazasi bo‘sh. Avval personaj qo‘shing.');
@@ -173,6 +175,7 @@ async function sendDrop(chatId, { announceEmpty = false } = {}) {
     return true;
   } catch (e) {
     console.error('sendDrop photo error:', e.message);
+    lastDropError.set(String(chatId), e.message);
     await run('DELETE FROM active_drops WHERE chat_id=?', [String(chatId)]);
     return false;
   }
@@ -315,7 +318,7 @@ async function insertCharacter({ name, anime, rarity, aliases, photoId }) {
 cmd('addhelp', msg => {
   if (!isAdmin(msg.from.id)) return bot.sendMessage(msg.chat.id, '⛔ Bu buyruq faqat admin uchun.');
   return bot.sendMessage(msg.chat.id,
-    'Eng oson yo‘l: shaxsiy chatda /panel buyrug‘ini yuboring va tugmalardan foydalaning.\n\nYoki qo‘lda:\n1) Botga rasm yuboring.\n2) Caption:\n/addcharacter Ism | Anime | Rarity | alias1,alias2\n\nRarity: Common, Rare, Epic, Legendary\nMisol:\n/addcharacter Gojo Satoru | Jujutsu Kaisen | Legendary | gojo,satoru');
+    'Eng oson yo‘l: shaxsiy chatda /panel buyrug‘ini yuboring va tugmalardan foydalaning.\nGuruhda nimadir ishlamasa: /diag\n\nYoki qo‘lda:\n1) Botga rasm yuboring.\n2) Caption:\n/addcharacter Ism | Anime | Rarity | alias1,alias2\n\nRarity: Common, Rare, Epic, Legendary\nMisol:\n/addcharacter Gojo Satoru | Jujutsu Kaisen | Legendary | gojo,satoru');
 });
 bot.on('photo', async msg => {
   try {
@@ -338,6 +341,39 @@ bot.on('photo', async msg => {
     console.error('add photo error:', e);
     bot.sendMessage(msg.chat.id, 'Personajni qo‘shishda xatolik yuz berdi.').catch(() => {});
   }
+});
+
+// Admin diagnostics: works in groups even when Group Privacy is ON (commands are always delivered).
+cmd('diag', async msg => {
+  if (!isAdmin(msg.from.id)) return;
+  const chatId = String(msg.chat.id);
+  const me = await bot.getMe().catch(() => null);
+  if (me) privacyOn = me.can_read_all_group_messages === false;
+  const chars = (await get('SELECT COUNT(*) AS n FROM characters')).n;
+  const gs = await get('SELECT message_count FROM group_stats WHERE chat_id=?', [chatId]);
+  const drop = await get(
+    'SELECT c.name FROM active_drops d LEFT JOIN characters c ON c.id=d.character_id WHERE d.chat_id=?', [chatId]);
+  let member = '—';
+  if (me && isGroupChat(msg.chat)) {
+    const m = await bot.getChatMember(msg.chat.id, me.id).catch(e => ({ status: 'xato: ' + e.message }));
+    member = m.status +
+      (m.can_send_messages === false ? ' ⚠️ xabar yoza olmaydi' : '') +
+      (m.can_send_photos === false ? ' ⚠️ rasm yubora olmaydi' : '');
+  }
+  const err = lastDropError.get(chatId);
+  const lines = [
+    '🩺 Diagnostika',
+    `💬 Chat: ${msg.chat.id} (${msg.chat.type})`,
+    `🔢 Sanoq: ${gs ? gs.message_count : 0}/${DROP_EVERY}`,
+    `🎴 Personajlar: ${chars}${chars ? '' : ' ❌ baza bo‘sh!'}`,
+    `🎯 Faol drop: ${drop ? (drop.name || 'noma’lum') : 'yo‘q'}`,
+    `🤖 Botning guruhdagi holati: ${member}`,
+    `👁 Group Privacy: ${privacyOn ? 'yoqilgan ⚠️' : 'o‘chirilgan ✅'}`
+  ];
+  if (privacyOn) lines.push('\nBot guruh ADMINI bo‘lmasa, oddiy xabarlarni ko‘rmaydi (shuning uchun sanoq 0 da turadi). Yechim: botni guruhda admin qiling yoki @BotFather → /setprivacy → Disable va botni guruhdan chiqarib qayta qo‘shing.');
+  if (isGroupChat(msg.chat) && !privacyOn && gs && gs.message_count === 0 && chars) lines.push('\nSanoq 0: guruhda bir nechta oddiy xabar yozing va /diag ni qayta yuboring.');
+  if (err) lines.push(`\n⚠️ Oxirgi drop xatosi: ${err}`);
+  await bot.sendMessage(msg.chat.id, lines.join('\n'));
 });
 
 // ============================== ADMIN PANEL (inline buttons) ==============================
@@ -681,8 +717,14 @@ bot.on('callback_query', async q => {
       }
       case 'settings':
         return showText(q, settingsText(), backMenuKb());
-      case 'drop':
-        return sendDrop(chatId, { announceEmpty: true });
+      case 'drop': {
+        const dropped = await sendDrop(chatId, { announceEmpty: true });
+        const err = lastDropError.get(String(chatId));
+        if (!dropped && err) {
+          await bot.sendMessage(chatId, `⚠️ Drop yuborilmadi: ${err}\n\nEhtimol personaj rasmi boshqa bot tokeni bilan qo‘shilgan. Rasmni shu bot orqali qayta yuklang (✏️ Rasm).`);
+        }
+        return;
+      }
       default:
         return;
     }
@@ -709,7 +751,10 @@ bot.on('message', async msg => {
   }
 });
 
-bot.on('polling_error', err => console.error('Telegram polling error:', err.message));
+bot.on('polling_error', err => {
+  console.error('Telegram polling error:', err.message);
+  if (/409/.test(err.message)) console.error('⚠️  409 Conflict: shu token bilan boshqa joyda ham bot ishlayapti (eski Python bot, ikkinchi deploy, kompyuter). Bittasidan boshqasini to‘xtating.');
+});
 bot.on('error', err => console.error('Bot error:', err.message));
 process.on('unhandledRejection', e => console.error('Unhandled rejection:', e));
 

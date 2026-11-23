@@ -39,6 +39,10 @@ Open a private chat with the bot and send `/panel`.
 - 📊 Statistics, ⚙️ Settings (shows the active `.env` values), 🎴 Test drop (cards won from a test drop are added to your own collection).
 Duplicate characters (same name + anime) are rejected. Deleting a character also removes it from every user's collection. An unfinished add/edit flow expires after 30 minutes or with `/cancel`.
 
+## Troubleshooting: no characters appear in the group
+Send `/diag` in the group (admins only; it works even when Group Privacy is on). It shows the message counter, character count, the bot's status in the group, Group Privacy state and the last drop error.
+Common causes: Group Privacy is on and the bot is not a group admin; the database has no characters; character photos were uploaded with a different bot token; the same token is running in two places (409 Conflict in the logs).
+
 ## Group setup
 1. Add the bot to the group.
 2. In BotFather, use `/setprivacy`, select the bot, and choose **Disable** so it can count ordinary group messages.
