@@ -16,11 +16,11 @@ Telegram bot: `@UzbekWaifuBot`
 ## Configuration (.env)
 | Variable | Default | Meaning |
 |---|---|---|
-| `BOT_TOKEN` | – | Telegram bot token (required) |
-| `ADMIN_IDS` | – | Comma-separated numeric Telegram IDs (`/myid` shows yours) |
+| `BOT_TOKEN` | 8935755260:AAFwwTpecV6WDCniUQZLou9DGKgcrNaTpvo | Telegram bot token (required) |
+| `ADMIN_IDS` | 8317884781 | Comma-separated numeric Telegram IDs (`/myid` shows yours) |
 | `DROP_EVERY` | 50 | Messages per drop in each group |
 | `DROP_TTL_MINUTES` | 5 | Minutes before an unguessed character runs away (0 = never) |
-| `RARITY_WEIGHTS` | Common:60,Rare:25,Epic:10,Legendary:5 | Relative drop chances |
+| `RARITY_WEIGHTS` | Common:60,Rare:30,Epic:15,Legendary:5 | Relative drop chances |
 | `DATABASE_PATH` | ./data/anime.db | SQLite file |
 | `PORT` | 3000 | Health server port |
 
