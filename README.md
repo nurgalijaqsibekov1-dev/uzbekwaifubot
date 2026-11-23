@@ -4,7 +4,7 @@ Telegram bot: `@UzbekWaifuBot`
 
 ## Features
 - A random character appears after every `DROP_EVERY` (default 50) messages in a group. Text, photos, stickers, voice, video etc. all count; commands do not.
-- Drops follow rarity odds (`RARITY_WEIGHTS`, default Common 60 / Rare 25 / Epic 10 / Legendary 5) and never repeat back-to-back in the same chat.
+- Drops follow rarity odds (`RARITY_WEIGHTS`, default Common 60 / Rare 30 / Epic 15 / Legendary 5) and never repeat back-to-back in the same chat.
 - The first person to type the name (or an alias) wins the card. Matching ignores case, accents, punctuation and word order, and two simultaneous answers cannot both win.
 - Unguessed characters run away after `DROP_TTL_MINUTES` (default 5; `0` = never) and the chat is told who it was.
 - Commands: `/collection` (paginated, sorted by rarity), `/profile`, `/rank` (global), `/grouprank` (this group), `/stats`.
