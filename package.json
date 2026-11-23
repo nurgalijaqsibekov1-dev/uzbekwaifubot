@@ -1,0 +1,16 @@
+{
+  "name": "uzbek-waifu-game",
+  "version": "1.1.0",
+  "description": "Telegram anime character guessing and collection bot",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "node-telegram-bot-api": "^0.66.0",
+    "sqlite3": "^5.1.7"
+  }
+}
