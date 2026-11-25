@@ -1,69 +1,98 @@
-const fs = require('fs');
-const path = require('path');
-const sqlite3 = require('sqlite3').verbose();
+const { Pool } = require('pg');
 
-const dbPath = process.env.DATABASE_PATH || path.join(process.cwd(), 'data', 'anime.db');
-fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+const { databaseOptions, friendlyError } = require('./config');
+const pool = new Pool(databaseOptions());
+pool.on('error', err => console.error(friendlyError(err)));
+async function transaction(fn) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await fn(client.query.bind(client));
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally { client.release(); }
+}
 
-const db = new sqlite3.Database(dbPath);
+async function query(text, params = []) {
+  return pool.query(text, params);
+}
 
-function run(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    db.run(sql, params, function (err) {
-      if (err) return reject(err);
-      resolve({ id: this.lastID, changes: this.changes });
-    });
-  });
+async function initDb() {
+ return transaction(async query => {
+  await query("SELECT pg_advisory_xact_lock(827391)");
+  await query("CREATE SCHEMA IF NOT EXISTS waifu");
+  await query(`
+    CREATE TABLE IF NOT EXISTS waifu.users (
+      telegram_id BIGINT PRIMARY KEY,
+      username TEXT,
+      first_name TEXT,
+      language TEXT NOT NULL DEFAULT 'uz',
+      coins INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_daily_at TIMESTAMPTZ
+    );
+
+    CREATE TABLE IF NOT EXISTS waifu.characters (
+      id BIGSERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      anime TEXT NOT NULL DEFAULT 'Unknown',
+      rarity TEXT NOT NULL DEFAULT 'common',
+      image_url TEXT,
+      price INTEGER NOT NULL DEFAULT 100,
+      active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS waifu.user_characters (
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES waifu.users(telegram_id) ON DELETE CASCADE,
+      character_id BIGINT NOT NULL REFERENCES waifu.characters(id),
+      obtained_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS waifu.groups_list (
+      chat_id BIGINT PRIMARY KEY,
+      title TEXT,
+      enabled BOOLEAN NOT NULL DEFAULT TRUE
+    );
+
+    CREATE TABLE IF NOT EXISTS waifu.active_spawns (
+      id BIGSERIAL PRIMARY KEY,
+      chat_id BIGINT NOT NULL,
+      character_id BIGINT NOT NULL REFERENCES waifu.characters(id),
+      message_id BIGINT,
+      caught_by BIGINT,
+      expires_at TIMESTAMPTZ NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS waifu.transactions (
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES waifu.users(telegram_id),
+      kind TEXT NOT NULL,
+      amount INTEGER NOT NULL,
+      details JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await query(`CREATE INDEX IF NOT EXISTS user_cards_idx ON waifu.user_characters(user_id, obtained_at DESC);
+    CREATE INDEX IF NOT EXISTS active_spawn_idx ON waifu.active_spawns(chat_id, character_id) WHERE caught_by IS NULL;`);
+  const count = await query('SELECT COUNT(*)::int AS n FROM waifu.characters');
+  if (process.env.SEED_DEMO === 'true' && count.rows[0].n === 0) {
+    await query(
+      `INSERT INTO waifu.characters (name, anime, rarity, price) VALUES
+       ('Naruto Uzumaki', 'Naruto', 'common', 100),
+       ('Sasuke Uchiha', 'Naruto', 'rare', 300),
+       ('Monkey D. Luffy', 'One Piece', 'rare', 350),
+       ('Mikasa Ackerman', 'Attack on Titan', 'epic', 700),
+       ('Gojo Satoru', 'Jujutsu Kaisen', 'legendary', 1500),
+       ('Nezuko Kamado', 'Demon Slayer', 'epic', 800)`
+    );
+  }
+ });
 }
-function get(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => err ? reject(err) : resolve(row));
-  });
-}
-function all(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows));
-  });
-}
-async function init() {
-  await run('PRAGMA journal_mode = WAL');
-  await run(`CREATE TABLE IF NOT EXISTS characters (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    anime TEXT NOT NULL,
-    rarity TEXT NOT NULL,
-    aliases TEXT DEFAULT '',
-    photo_file_id TEXT NOT NULL,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
-  )`);
-  await run(`CREATE TABLE IF NOT EXISTS collections (
-    user_id TEXT NOT NULL,
-    character_id INTEGER NOT NULL,
-    obtained_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (user_id, character_id),
-    FOREIGN KEY(character_id) REFERENCES characters(id)
-  )`);
-  await run(`CREATE TABLE IF NOT EXISTS user_stats (
-    user_id TEXT PRIMARY KEY,
-    username TEXT DEFAULT '',
-    first_name TEXT DEFAULT '',
-    messages INTEGER DEFAULT 0,
-    correct_guesses INTEGER DEFAULT 0
-  )`);
-  await run(`CREATE TABLE IF NOT EXISTS group_stats (
-    chat_id TEXT PRIMARY KEY,
-    message_count INTEGER DEFAULT 0
-  )`);
-  await run(`CREATE TABLE IF NOT EXISTS group_catches (
-    chat_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
-    catches INTEGER DEFAULT 0,
-    PRIMARY KEY (chat_id, user_id)
-  )`);
-  await run(`CREATE TABLE IF NOT EXISTS active_drops (
-    chat_id TEXT PRIMARY KEY,
-    character_id INTEGER NOT NULL,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
-  )`);
-}
-module.exports = { db, run, get, all, init };
+
+module.exports = { query, initDb, pool, transaction };

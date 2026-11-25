@@ -1,0 +1,22 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Harem Games Admin</title><script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+body{margin:0;padding:20px;background:#11111b;color:#fff;font:15px system-ui;max-width:700px;margin:auto}
+.panel{background:#201d30;padding:16px;border-radius:16px;margin:14px 0}input,select{width:100%;padding:12px;margin:7px 0;background:#302b42;color:white;border:1px solid #514766;border-radius:9px}
+button{padding:12px 16px;border:0;border-radius:9px;background:#b68cff;font-weight:bold}small{color:#aaa}
+.stats{display:flex;gap:10px}.stats div{flex:1;background:#302b42;padding:12px;border-radius:10px}
+</style></head><body>
+<h1>⚙️ Harem Games Admin</h1><p><small>Open this page inside your Telegram Mini App as an authorized admin.</small></p>
+<section class="panel"><h3>Overview</h3><div class="stats"><div>Users<br><b id="users">—</b></div><div>Characters<br><b id="characters">—</b></div><div>Groups<br><b id="groups">—</b></div></div><p id="status"></p></section>
+<section class="panel"><h3>Add character</h3>
+<input id="name" placeholder="Character name"><input id="anime" placeholder="Anime / series">
+<select id="rarity"><option>common</option><option>uncommon</option><option>rare</option><option>epic</option><option>legendary</option><option>mythic</option><option>limited</option><option>special</option></select>
+<input id="price" type="number" placeholder="Price in coins"><input id="image" placeholder="Image URL (optional)">
+<button onclick="addCharacter()">Add character</button></section>
+<script>
+const el=id=>document.getElementById(id);
+const tg=window.Telegram?.WebApp;tg?.ready();const headers={'x-telegram-init-data':tg?.initData||'','Content-Type':'application/json'};
+async function load(){try{const r=await fetch('/api/admin/overview',{headers});const d=await r.json();if(!r.ok)throw Error(d.error);el('users').textContent=d.users;el('characters').textContent=d.characters;el('groups').textContent=d.groups}catch(e){el('status').textContent=e.message}}
+async function addCharacter(){try{const body={name:el('name').value,anime:el('anime').value,rarity:el('rarity').value,price:Number(el('price').value),image_url:el('image').value};const r=await fetch('/api/admin/characters',{method:'POST',headers,body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw Error(d.error);el('status').textContent='Added character #'+d.id;load()}catch(e){el('status').textContent=e.message}}
+load();
+</script></body></html>

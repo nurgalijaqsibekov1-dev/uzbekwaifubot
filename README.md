@@ -1,69 +1,67 @@
-# Uzbek Waifu Game (Node.js)
+# UzbekWaifuBot — Supabase versiyasi
 
-Telegram bot: `@UzbekWaifuBot`
+Node.js 20+ va Supabase PostgreSQL kerak. Bot kompyuter/serverda ishlaydi;
+Supabase ma’lumotlarni saqlaydi. Supabase API key talab qilinmaydi.
 
-## Features
-- A random character appears after every `DROP_EVERY` (default 50) messages in a group. Text, photos, stickers, voice, video etc. all count; commands do not.
-- Drops follow rarity odds (`RARITY_WEIGHTS`, default Common 60 / Rare 30 / Epic 15 / Legendary 5) and never repeat back-to-back in the same chat.
-- The first person to type the name (or an alias) wins the card. Matching ignores case, accents, punctuation and word order, and two simultaneous answers cannot both win.
-- Unguessed characters run away after `DROP_TTL_MINUTES` (default 5; `0` = never) and the chat is told who it was.
-- Commands: `/collection` (paginated, sorted by rarity), `/profile`, `/rank` (global), `/grouprank` (this group), `/stats`.
-- Admin panel with inline buttons (`/panel`, private chat only): add characters step by step, browse and search, edit name / anime / photo / rarity / aliases, delete with confirmation, stats, settings overview, test drop. It also warns you if Telegram's Group Privacy mode would stop the bot from seeing group messages.
-- Legacy admin command still works in private chat: send a photo with caption `/addcharacter Name | Anime | Rarity | aliases`
-- SQLite database (existing databases from v1.0 keep working; one new table is added automatically).
-- HTTP health endpoint at `/health` for hosting platforms.
+## Windows PowerShell
 
-## Configuration (.env)
-| Variable | Default | Meaning |
-|---|---|---|
-| `BOT_TOKEN` | 8935755260:AAFwwTpecV6WDCniUQZLou9DGKgcrNaTpvo | Telegram bot token (required) |
-| `ADMIN_IDS` | 8317884781 | Comma-separated numeric Telegram IDs (`/myid` shows yours) |
-| `DROP_EVERY` | 50 | Messages per drop in each group |
-| `DROP_TTL_MINUTES` | 5 | Minutes before an unguessed character runs away (0 = never) |
-| `RARITY_WEIGHTS` | Common:60,Rare:30,Epic:15,Legendary:5 | Relative drop chances |
-| `DATABASE_PATH` | ./data/anime.db | SQLite file |
-| `PORT` | 3000 | Health server port |
+ZIPni oching, UzbekWaifuBot papkasida terminal oching:
 
-## Setup locally
-1. Install Node.js 20 or newer.
-2. Copy `.env.example` to `.env`.
-3. Put your Telegram token in `BOT_TOKEN`. Keep it secret.
-4. Set `ADMIN_IDS` to comma-separated Telegram numeric user IDs.
-5. Install dependencies: `npm install`
-6. Start: `npm start`
+```powershell
+npm install
+Copy-Item .env.example .env
+notepad .env
+npm run db:check
+npm start
+```
 
-## Admin panel
-Open a private chat with the bot and send `/panel`.
-- ➕ Add character: photo → name → anime → rarity (buttons) → aliases (or skip).
-- 📋 List / 🔎 Search: open a character to edit its name, anime, photo, rarity, aliases, or delete it.
-- 📊 Statistics, ⚙️ Settings (shows the active `.env` values), 🎴 Test drop (cards won from a test drop are added to your own collection).
-Duplicate characters (same name + anime) are rejected. Deleting a character also removes it from every user's collection. An unfinished add/edit flow expires after 30 minutes or with `/cancel`.
+Agar .env avvaldan bo‘lsa, ustiga nusxalamang; uni tahrirlang.
 
-## Troubleshooting: no characters appear in the group
-Send `/diag` in the group (admins only; it works even when Group Privacy is on). It shows the message counter, character count, the bot's status in the group, Group Privacy state and the last drop error.
-Common causes: Group Privacy is on and the bot is not a group admin; the database has no characters; character photos were uploaded with a different bot token; the same token is running in two places (409 Conflict in the logs).
+1. Supabase loyihangizni oching → Connect → Session pooler → URI.
+2. Haqiqiy URI ni DATABASE_URL ga yozing. [YOUR-DATABASE-PASSWORD] o‘rniga
+   loyihani yaratganda kiritilgan baza parolini yozing (hisob paroli emas).
+   Host va username ni o‘zingiz tuzmang; Connect oynasidan to‘liq oling.
+3. Paroldagi maxsus belgilar URL-encoded bo‘lsin: @ → %40, # → %23,
+   : → %3A, / → %2F, % → %25. Butun URI emas, faqat parol kodlanadi.
+4. BOT_TOKEN ga BotFather tokeni, ADMIN_IDS ga raqamli Telegram ID yozing.
+5. Mahalliy bot sinovida APP_URL bo‘sh qolishi mumkin. Mini App va admin panel
+   uchun ushbu Node ilovasi joylashtirilgan haqiqiy HTTPS manzilini kiriting.
+6. SSL xatosida Supabase bazaning SSL settings bo‘limidan CA sertifikatini
+   yuklab, loyiha ichiga qo‘ying va DATABASE_CA_PATH=prod-ca-2021.crt kabi yozing.
+   Sertifikat tekshiruvi doim yoqilgan. DATABASE_SSL=false faqat mahalliy PostgreSQL uchun.
 
-## Group setup
-1. Add the bot to the group.
-2. In BotFather, use `/setprivacy`, select the bot, and choose **Disable** so it can count ordinary group messages.
-3. Ensure the bot can send messages in the group.
-4. The bot posts a new drop after every `DROP_EVERY` non-command group messages. If Group Privacy is still on, `/panel` shows a warning.
+Session pooler IPv4 tarmoqlariga mos; port odatda 5432. Manzil oxiriga
+?sslmode=... qo‘shmang: SSL alohida sozlangan.
 
-## Docker
-Build:
-`docker build -t uzbek-waifu-game .`
+## Ma’lumotlar
 
-Run (mount a persistent folder for SQLite):
-`docker run -d --name waifu-bot --restart unless-stopped --env-file .env -v waifu-data:/data uzbek-waifu-game`
+Jadvallar birinchi ishga tushishda `waifu` sxemasida atomik yaratiladi.
+Supabase Table Editor da shu sxemani tanlang. `waifu` ni Data API exposed schemas
+ro‘yxatiga qo‘shmang va anon/authenticated rollariga ruxsat bermang.
+Frontend faqat Telegram imzosi tekshiriladigan Node API orqali ishlaydi.
 
-## Render notes
-This project uses Telegram long polling. Use a service type that supports a continuously running process (Background Worker where available), set:
-- Build command: `npm install`
-- Start command: `npm start`
-- Environment variables: `BOT_TOKEN`, `ADMIN_IDS`, `DATABASE_PATH=/data/anime.db`
+SEED_DEMO=true bo‘lsa, bo‘sh bazaga 6 boshlang‘ich personaj qo‘shiladi.
+false qilsangiz, admin paneldan o‘zingiz qo‘shasiz.
+Qayta ishga tushirish mavjud waifu ma’lumotlarini o‘chirmaydi.
+Oldingi versiyaning public sxemasidagi ma’lumotlar avtomatik ko‘chirilmaydi;
+agar mavjud bo‘lsa, zaxira oling va alohida migratsiya qiling.
 
-Attach a persistent disk mounted at `/data` if the Render plan supports it. Without persistent storage, SQLite data may be lost on redeploy/restart.
-A free web service may sleep and is not a reliable 24/7 host. If using a Web Service, the included `/health` endpoint binds to `PORT`, but sleep limits still apply.
+## Buyruqlar
 
-## Existing Python database
-The original Python `anime.db` schema was not included when this Node.js package was generated. This project creates its own SQLite tables. Do not replace your existing database with the new one until you have a backup and have checked/imported the old schema.
+/start, /help, /lang uz, /lang en, /profile, /daily (20 soatda bir),
+/collection, /shop, /buy ID, /stats.
+Admin guruhda /spawn yuboradi, o‘yinchi /catch ID bilan kartani tutadi.
+Spawn 5 daqiqada tugaydi. Avtomatik spawn bu versiyada yo‘q.
+Admin sahifa: APP_URL/admin, Telegram Mini App kontekstida ochiladi.
+
+## Tekshirish va ishlatish
+
+`npm test` konfiguratsiya sinovlari; `npm run db:check` haqiqiy bazani tekshiradi
+va kerakli jadvallarni yaratadi. Xarid, daily va catch tranzaksiyalarda bajariladi.
+Bitta bot nusxasini ishlating. Ctrl+C bilan to‘xtating.
+Kompyuter o‘chsa bot ham to‘xtaydi; doimiy ishlash uchun Node server kerak.
+.env va node_modules ZIP/GitHubga qo‘shilmaydi.
+
+Rasmiy yo‘riqnomalar:
+https://supabase.com/docs/guides/database/connecting-to-postgres
+https://supabase.com/docs/guides/database/postgres/row-level-security
